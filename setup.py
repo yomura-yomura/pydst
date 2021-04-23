@@ -6,7 +6,6 @@ import dst_extension_build
 class build(build_py):
     def run(self):
         dst_extension_build.build()
-        super().run()
 
 
 setup(
