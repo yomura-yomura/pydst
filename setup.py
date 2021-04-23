@@ -1,5 +1,5 @@
 from setuptools import setup, find_packages
-from distutils.command import build_py
+from distutils.command.build_py import build_py
 import dst_extension_build
 
 
