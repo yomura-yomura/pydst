@@ -336,6 +336,11 @@ def build():
     p.with_suffix(".o").unlink()
     p.with_suffix(".c").unlink()
 
+    lib_paths = list(pathlib.Path(_current_path).glob(f"{target_fn}.*"))
+    assert len(lib_paths) == 1
+    lib_path = lib_paths[0]
+    lib_path.rename(_current_path/"build"/"lib"/"pydst"/ lib_path.name)
+
 
 if __name__ == "__main__":
     build()
