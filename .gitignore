@@ -1,3 +1,5 @@
 .idea/
 dist/
 build/
+pydst/_dst_cffi.*so
+**/__pycache__/
