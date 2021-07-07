@@ -253,6 +253,10 @@ def parse_header(h, ext={}, debug=False, remove_dependencies=True, show=False):
 
 def build():
     print(f"* Received Environment Variable '{env_variable}' as {dst2k_path}")
+    build_path = _current_path/"build"
+
+    if not build_path.exists():
+        raise RuntimeWarning(f"do not run {__file__} directly at first.")
 
     bank_header_names = [
         h for h in (c.with_suffix(".h").name for c in src_bank_path.glob("*.c")) if h not in invalid_headers
@@ -339,7 +343,7 @@ def build():
     lib_paths = list(pathlib.Path(_current_path).glob(f"{target_fn}.*"))
     assert len(lib_paths) == 1
     lib_path = lib_paths[0]
-    lib_path.rename(_current_path/"build"/"lib"/"pydst"/ lib_path.name)
+    lib_path.rename(build_path/"lib"/"pydst"/lib_path.name)
 
 
 if __name__ == "__main__":

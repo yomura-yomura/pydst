@@ -18,7 +18,7 @@ class build(setuptools.command.build_py.build_py):
 
 setup(
     name='pydst',
-    version='0.0',
+    version='0.1',
     description='',
     author='yomura',
     author_email='yomura@hoge.jp',

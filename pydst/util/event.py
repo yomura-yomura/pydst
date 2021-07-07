@@ -11,6 +11,7 @@ from .. import c_to_py
 from . import bank_list
 import builtins
 import tqdm
+import numpy_utility as npu
 
 
 def open(file, mode="r"):
@@ -76,6 +77,8 @@ class DSTIOWrapper:
         dst.lib.dstOpenUnit(self.in_unit, str(path).encode('ascii'), in_mode)
         DSTIOWrapper.used_unit_numbers.add(self.in_unit)
 
+        self.event = dst.ffi.new('int32_t *')
+
     def __str__(self):
         return f"<{self.__class__.__name__} name='{self.name}' mode='{self.mode}' in_unit={self.in_unit}>"
 
@@ -83,6 +86,7 @@ class DSTIOWrapper:
         return self.__str__()
 
     def __del__(self):
+        dst.ffi.release(self.event)
         if not self.closed:
             self.close()
 
@@ -105,11 +109,10 @@ class DSTIOWrapper:
             if self._uncompressed_path.exists():
                 self._uncompressed_path.unlink()
 
-    def read_dst(self, want_bank_names=None, show_progress=True):
+    def read_dst(self, want_bank_names=None, show_progress=True, return_as_numpy_array=True):
         if self.mode != "r":
             raise io.UnsupportedOperation("not readable")
 
-        event = dst.ffi.new('int32_t *')
         want_bank = bank_list.BankList(150)
         if want_bank_names is None:
             want_bank.set_all_banks()
@@ -120,38 +123,48 @@ class DSTIOWrapper:
         # null_fds = [os.open(os.devnull, os.O_RDWR) for _ in range(2)]
         # # save the current file descriptors to a tuple
         # save = os.dup(1), os.dup(2)
-        if show_progress:
-            progress = tqdm.tqdm(file=sys.stdout)
+        # if show_progress:
+        #     progress = tqdm.tqdm(file=sys.stdout)
 
-        ret = []
+        # ret = []
         while True:
-            if show_progress:
-                progress.update()
+            #     if show_progress:
+            #         progress.update()
             # # put /dev/null fds on 1 and 2
             # os.dup2(null_fds[0], 1)
             # os.dup2(null_fds[1], 2)
 
-            rc = dst.lib.eventRead(self.in_unit, want_bank._bank_id, got_bank._bank_id, event)
+            rc = dst.lib.eventRead(self.in_unit, want_bank._bank_id, got_bank._bank_id, self.event)
 
             # # restore file descriptors so I can print the results
             # os.dup2(save[0], 1)
             # os.dup2(save[1], 2)
 
-            if event[0] == 0:
+            if self.event[0] == 0:
                 break
+                # raise StopIteration
             if rc <= 0:
                 raise ValueError(rc)
 
             bank_names = get_name_from_id(list(got_bank))
-            ret.append({bn: c_to_py.convert(getattr(dst.lib, f"{bn}_")) for bn in bank_names})
+            row = {bn: c_to_py.convert(getattr(dst.lib, f"{bn}_")) for bn in bank_names}
+            # if return_as_numpy_array:
+            #     ret.append(npu.from_dict(row))
+            # else:
+            #     ret.append(row)
+            if return_as_numpy_array:
+                yield npu.from_dict(row)[0]
+            else:
+                yield row
 
-        dst.ffi.release(event)
-
-        # # close the temporary fds
-        # os.close(null_fds[0])
-        # os.close(null_fds[1])
-
-        return ret
+        # # # close the temporary fds
+        # # os.close(null_fds[0])
+        # # os.close(null_fds[1])
+        #
+        # if return_as_numpy_array:
+        #     return np.concatenate(ret)
+        # else:
+        #     return ret
 
     def write_dst(self, event_list: list, show_progress=True):
         if self.mode == "r":
