@@ -33,6 +33,37 @@ def open(file, mode="r"):
     return DSTIOWrapper(path, mode)
 
 
+from contextlib import contextmanager
+
+
+@contextmanager
+def stdout_redirected(to=os.devnull):
+    """
+    import os
+
+    with stdout_redirected(to=filename):
+        print("from Python")
+        os.system("echo non-Python applications are also supported")
+    """
+    fd = sys.stdout.fileno()
+
+    ##### assert that Python and C stdio write using the same file descriptor
+    ####assert libc.fileno(ctypes.c_void_p.in_dll(libc, "stdout")) == fd == 1
+
+    def _redirect_stdout(to):
+        sys.stdout.close()  # + implicit flush()
+        os.dup2(to.fileno(), fd)  # fd writes to 'to' file
+        sys.stdout = os.fdopen(fd, 'w')  # Python writes to fd
+
+    with os.fdopen(os.dup(fd), 'w') as old_stdout:
+        with open(to, 'w') as file:
+            _redirect_stdout(to=file)
+        try:
+            yield  # allow code to be run with the redirected stdout
+        finally:
+            _redirect_stdout(to=old_stdout)
+
+
 class DSTIOWrapper:
     used_unit_numbers = {0}
     mode_table = {
@@ -56,9 +87,9 @@ class DSTIOWrapper:
         self.mode = mode
         self.closed = False
         self.is_gz_file = path.suffix == ".gz"
-        
+
         in_mode = DSTIOWrapper.mode_table[mode]
-        
+
         if self.is_gz_file:
             if mode in ("w", "a"):
                 self._uncompressed_path = path.with_suffix("")
@@ -73,7 +104,7 @@ class DSTIOWrapper:
                             shutil.copyfileobj(f_uncompressed, f)
 
             path = self._uncompressed_path
-        
+
         dst.lib.dstOpenUnit(self.in_unit, str(path).encode('ascii'), in_mode)
         DSTIOWrapper.used_unit_numbers.add(self.in_unit)
 
@@ -98,6 +129,7 @@ class DSTIOWrapper:
 
     def close(self):
         dst.lib.dstCloseUnit(self.in_unit)
+        DSTIOWrapper.used_unit_numbers.remove(self.in_unit)
         self.closed = True
 
         if self.is_gz_file:
@@ -109,7 +141,7 @@ class DSTIOWrapper:
             if self._uncompressed_path.exists():
                 self._uncompressed_path.unlink()
 
-    def read_dst(self, want_bank_names=None, show_progress=True, return_as_numpy_array=True):
+    def read_dst(self, want_bank_names=None, return_as_numpy_array=True):
         if self.mode != "r":
             raise io.UnsupportedOperation("not readable")
 
@@ -123,13 +155,9 @@ class DSTIOWrapper:
         # null_fds = [os.open(os.devnull, os.O_RDWR) for _ in range(2)]
         # # save the current file descriptors to a tuple
         # save = os.dup(1), os.dup(2)
-        # if show_progress:
-        #     progress = tqdm.tqdm(file=sys.stdout)
 
         # ret = []
         while True:
-            #     if show_progress:
-            #         progress.update()
             # # put /dev/null fds on 1 and 2
             # os.dup2(null_fds[0], 1)
             # os.dup2(null_fds[1], 2)
@@ -217,7 +245,3 @@ def get_name_from_id(bank_id):
     ret = _inner(bank_id)
     dst.ffi.release(text)
     return ret
-
-
-
-

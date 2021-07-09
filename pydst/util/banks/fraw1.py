@@ -12,7 +12,7 @@ def get_datetime_at_mirror(fraw1_, i_mirror=0):
     M = (_total_seconds // 60) % 60
     S = _total_seconds % 60
     nanosecond = (50 * fraw1_["clkcnt"][i_mirror] / 3 + fraw1_["jclkcnt"]).astype(int)
-    return np.datetime64(f"{Y}-{m:02}-{d:02}T{H:02}:{M:02}:{S:02}.{nanosecond}")
+    return np.datetime64(f"{Y}-{m:02}-{d:02}T{H:02}:{M:02}:{S:02}.{nanosecond:09}")
 
 
 def print(fraw1_):
