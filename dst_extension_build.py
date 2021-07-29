@@ -339,14 +339,17 @@ def build():
     p.with_suffix(".o").unlink()
     p.with_suffix(".c").unlink()
 
+    lib_paths = list(pathlib.Path(_current_path).glob(f"{target_fn}.*"))
+    assert len(lib_paths) == 1
+    lib_path = lib_paths[0]
+
     build_path = _current_path/"build"
     if build_path.exists():
-        lib_paths = list(pathlib.Path(_current_path).glob(f"{target_fn}.*"))
-        assert len(lib_paths) == 1
-        lib_path = lib_paths[0]
         lib_path.rename(build_path/"lib"/"pydst"/lib_path.name)
     else:
-        raise FileNotFoundError(build_path)
+        print(f"Info: {build_path} not found")
+        print(f"Info: moved {lib_path.name} to pydst/")
+        lib_path.rename(_current_path/"pydst"/lib_path.name)
 
 
 if __name__ == "__main__":
