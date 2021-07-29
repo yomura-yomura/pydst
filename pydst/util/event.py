@@ -201,17 +201,27 @@ class DSTIOWrapper:
         got_bank = bank_list.BankList(150)
 
         if show_progress:
-            event_list = tqdm.tqdm(event_list, file=sys.stdout)
+            event_list = tqdm.tqdm(event_list, file=sys.stdout, desc="writing DST")
+
+        def _get_names(event):
+            if isinstance(event, dict):
+                return tuple(event.keys())
+            elif hasattr(event, "dtype"):
+                return event.dtype.names
+            else:
+                raise TypeError(type(event))
 
         for event in event_list:
-            names = tuple(event.keys())
+            names = _get_names(event)
 
             got_bank.clear()
             got_bank.extend(get_id_from_name(names))
 
             for name in names:
                 var = getattr(dst.lib, f"{name}_")
-                for k, v in event[name].items():
+                for k in _get_names(event[name]):
+                    v = event[name][k]
+
                     obj = getattr(var, k)
                     if isinstance(obj, dst.ffi.CData):
                         cname = dst.ffi.typeof(obj).cname
