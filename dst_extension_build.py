@@ -246,17 +246,16 @@ def parse_header(h, ext={}, debug=False, remove_dependencies=True, show=False):
 
     print(f"read headers {len(ext):>3} / {total_header}\r", end="")
 
-    if show:
-        print(g.visit(pycparser.c_ast.FileAST(ext[h])))
+    # if show:
+    #     print(g.visit(pycparser.c_ast.FileAST(ext[h])))
     return ext[h]
 
 
 def build():
     print(f"* Received Environment Variable '{env_variable}' as {dst2k_path}")
-    build_path = _current_path/"build"
 
-    if not build_path.exists():
-        raise RuntimeWarning(f"do not run {__file__} directly at first.")
+    # if not build_path.exists():
+    #     raise RuntimeWarning(f"do not run {__file__} directly at first.")
 
     bank_header_names = [
         h for h in (c.with_suffix(".h").name for c in src_bank_path.glob("*.c")) if h not in invalid_headers
@@ -332,7 +331,7 @@ def build():
         target_fn, dst_includes,
         include_dirs=[str(include_dir_path)],
         library_dirs=[str(lib_dir_path)],
-        libraries=['dst2k']
+        libraries=['dst2k', "bz2", "m", "c", "z"]
     )
 
     ffi_builder.compile(verbose=True)
@@ -340,10 +339,14 @@ def build():
     p.with_suffix(".o").unlink()
     p.with_suffix(".c").unlink()
 
-    lib_paths = list(pathlib.Path(_current_path).glob(f"{target_fn}.*"))
-    assert len(lib_paths) == 1
-    lib_path = lib_paths[0]
-    lib_path.rename(build_path/"lib"/"pydst"/lib_path.name)
+    build_path = _current_path/"build"
+    if build_path.exists():
+        lib_paths = list(pathlib.Path(_current_path).glob(f"{target_fn}.*"))
+        assert len(lib_paths) == 1
+        lib_path = lib_paths[0]
+        lib_path.rename(build_path/"lib"/"pydst"/lib_path.name)
+    else:
+        raise FileNotFoundError(build_path)
 
 
 if __name__ == "__main__":

@@ -3,16 +3,30 @@ import more_itertools
 import numpy as np
 
 
+__all__ = ["get_datetime_at_mirror", "print"]
+
+
 def get_datetime_at_mirror(fraw1_, i_mirror=0):
+    Y, m, d, H, M, S, nanosecond = _get_sep_datetime_at_mirror(fraw1_, i_mirror)
+    return np.datetime64(f"{Y}-{m:02}-{d:02}T{H:02}:{M:02}:{S:02}.{nanosecond:09}")
+
+
+def _get_sep_datetime_at_mirror(fraw1_, i_mirror):
     Y = fraw1_["julian"] // 10000
     m = (fraw1_["julian"] // 100) % 100
     d = fraw1_["julian"] % 100
-    _total_seconds = fraw1_["jsecond"] + fraw1_["second"][i_mirror]
+
+    _total_seconds = fraw1_["jsecond"] + fraw1_["second"][..., i_mirror]
+    nanosecond = (50 * fraw1_["clkcnt"][..., i_mirror] / 3 + fraw1_["jclkcnt"]).astype(int)
+    if nanosecond > 999999999:
+        nanosecond -= 1000000000
+        _total_seconds += 1
+
     H = _total_seconds // 3600
     M = (_total_seconds // 60) % 60
     S = _total_seconds % 60
-    nanosecond = (50 * fraw1_["clkcnt"][i_mirror] / 3 + fraw1_["jclkcnt"]).astype(int)
-    return np.datetime64(f"{Y}-{m:02}-{d:02}T{H:02}:{M:02}:{S:02}.{nanosecond:09}")
+
+    return Y, m, d, H, M, S, nanosecond
 
 
 def print(fraw1_):
@@ -31,23 +45,16 @@ def print(fraw1_):
         )
     ])
 
-    i = np.arange(fraw1_["num_mir"])
+    indices_mirror = np.arange(fraw1_["num_mir"])
     mirror_headers = [
         f" m  {m:>4} num_chan  {num_chan:>4}"
-        for m, num_chan in zip(fraw1_["mir_num"][i], fraw1_["num_chan"][i])
+        for m, num_chan in zip(fraw1_["mir_num"][indices_mirror], fraw1_["num_chan"][indices_mirror])
     ]
 
+    _, _, _, H, M, S, nanosecond = _get_sep_datetime_at_mirror(fraw1_, indices_mirror)
     mirror_times = [
-        " event store start time -- {H}:{M:02}:{S:02}.{nanosecond:09d}".format(
-            H=ss // 3600,
-            M=(ss // 60) % 60,
-            S=ss % 60,
-            nanosecond=cc
-        )
-        for ss, cc in zip(
-            fraw1_["jsecond"] + fraw1_["second"][i],
-            (50 * fraw1_["clkcnt"][i] / 3 + fraw1_["jclkcnt"]).astype(int)
-        )
+        " event store start time -- {}:{:02}:{:02}.{:09d}".format(*args)
+        for args in zip(H, M, S, nanosecond)
     ]
 
     signal_headers = [
@@ -56,7 +63,7 @@ def print(fraw1_):
             for jp1, chn_i_j, it0chn_i_j, ntchn_i_j in zip(np.arange(num_chan_i) + 1, channel_i, it0_chan_i, nt_chan_i)
         ]
         for num_chan_i, channel_i, it0_chan_i, nt_chan_i in zip(
-            fraw1_["num_chan"][i], fraw1_["channel"][i], fraw1_["it0_chan"][i], fraw1_["nt_chan"][i]
+            fraw1_["num_chan"][indices_mirror], fraw1_["channel"][indices_mirror], fraw1_["it0_chan"][indices_mirror], fraw1_["nt_chan"][indices_mirror]
         )
     ]
 
@@ -66,7 +73,7 @@ def print(fraw1_):
             for m_fadc_i_j, nt_chan_i_j, _ in zip(m_fadc_i, nt_chan_i, np.arange(num_chan_i))
         ]
         for m_fadc_i, num_chan_i, nt_chan_i in zip(
-            fraw1_["m_fadc"][i].view("i1"), fraw1_["num_chan"][i], fraw1_["nt_chan"][i]
+            fraw1_["m_fadc"][indices_mirror].view("i1"), fraw1_["num_chan"][indices_mirror], fraw1_["nt_chan"][indices_mirror]
         )
     ]
 
