@@ -4,6 +4,7 @@ import pathlib
 import gzip
 import shutil
 import sys
+import warnings
 
 import numpy as np
 from .. import _dst_cffi as dst
@@ -33,35 +34,35 @@ def open(file, mode="r"):
     return DSTIOWrapper(path, mode)
 
 
-from contextlib import contextmanager
-
-
-@contextmanager
-def stdout_redirected(to=os.devnull):
-    """
-    import os
-
-    with stdout_redirected(to=filename):
-        print("from Python")
-        os.system("echo non-Python applications are also supported")
-    """
-    fd = sys.stdout.fileno()
-
-    ##### assert that Python and C stdio write using the same file descriptor
-    ####assert libc.fileno(ctypes.c_void_p.in_dll(libc, "stdout")) == fd == 1
-
-    def _redirect_stdout(to):
-        sys.stdout.close()  # + implicit flush()
-        os.dup2(to.fileno(), fd)  # fd writes to 'to' file
-        sys.stdout = os.fdopen(fd, 'w')  # Python writes to fd
-
-    with os.fdopen(os.dup(fd), 'w') as old_stdout:
-        with open(to, 'w') as file:
-            _redirect_stdout(to=file)
-        try:
-            yield  # allow code to be run with the redirected stdout
-        finally:
-            _redirect_stdout(to=old_stdout)
+# from contextlib import contextmanager
+#
+#
+# @contextmanager
+# def stdout_redirected(to=os.devnull):
+#     """
+#     import os
+#
+#     with stdout_redirected(to=filename):
+#         print("from Python")
+#         os.system("echo non-Python applications are also supported")
+#     """
+#     fd = sys.stdout.fileno()
+#
+#     ##### assert that Python and C stdio write using the same file descriptor
+#     ####assert libc.fileno(ctypes.c_void_p.in_dll(libc, "stdout")) == fd == 1
+#
+#     def _redirect_stdout(to):
+#         sys.stdout.close()  # + implicit flush()
+#         os.dup2(to.fileno(), fd)  # fd writes to 'to' file
+#         sys.stdout = os.fdopen(fd, 'w')  # Python writes to fd
+#
+#     with os.fdopen(os.dup(fd), 'w') as old_stdout:
+#         with open(to, 'w') as file:
+#             _redirect_stdout(to=file)
+#         try:
+#             yield  # allow code to be run with the redirected stdout
+#         finally:
+#             _redirect_stdout(to=old_stdout)
 
 
 class DSTIOWrapper:
@@ -72,8 +73,8 @@ class DSTIOWrapper:
         "a": 3
     }
 
-    def __init__(self, name: os.PathLike, mode: str):
-        path = pathlib.Path(name)
+    def __init__(self, path: os.PathLike, mode: str):
+        path = pathlib.Path(path)
 
         if mode not in DSTIOWrapper.mode_table:
             raise ValueError(f"invalid mode: '{mode}'")
@@ -82,7 +83,7 @@ class DSTIOWrapper:
             raise FileNotFoundError(f"[Errno 2] No such file: '{path}'")
 
         self.in_unit = max(DSTIOWrapper.used_unit_numbers) + 1
-        self.name = name
+        self.path = path
         self.mode = mode
         self.closed = False
         # self.is_gz_file = path.suffix == ".gz"
@@ -111,7 +112,7 @@ class DSTIOWrapper:
         self.event = dst.ffi.new('int32_t *')
 
     def __str__(self):
-        return f"<{self.__class__.__name__} name='{self.name}' mode='{self.mode}' in_unit={self.in_unit}>"
+        return f"<{self.__class__.__name__} name='{self.path}' mode='{self.mode}' in_unit={self.in_unit}>"
 
     def __repr__(self):
         return self.__str__()
@@ -134,7 +135,7 @@ class DSTIOWrapper:
 
         if self.is_gz_file:
             if self.mode in ("w", "a"):
-                with gzip.open(self.name, f"{self.mode}b") as f_compressed:
+                with gzip.open(self.path, f"{self.mode}b") as f_compressed:
                     with builtins.open(self._uncompressed_path, "rb") as f:
                         shutil.copyfileobj(f, f_compressed)
 
@@ -156,7 +157,6 @@ class DSTIOWrapper:
         # # save the current file descriptors to a tuple
         # save = os.dup(1), os.dup(2)
 
-        # ret = []
         while True:
             # # put /dev/null fds on 1 and 2
             # os.dup2(null_fds[0], 1)
@@ -170,16 +170,22 @@ class DSTIOWrapper:
 
             if self.event[0] == 0:
                 break
-                # raise StopIteration
+
             if rc <= 0:
-                raise ValueError(rc)
+                if rc == -1:
+                    warnings.warn(  # This bank have not finished properly in the writing process.
+                        "STOP_BANK not found.", RuntimeWarning
+                    )
+                    break
+                else:
+                    raise RuntimeError(f"""
+    Error code = {rc} while reading dst '{self.path}'.
+    It might be useful to check 'dst2k-ta/inc/dst_err_codes.h'.
+                    """)
 
             bank_names = get_name_from_id(list(got_bank))
             row = {bn: c_to_py.convert(getattr(dst.lib, f"{bn}_")) for bn in bank_names}
-            # if return_as_numpy_array:
-            #     ret.append(npu.from_dict(row))
-            # else:
-            #     ret.append(row)
+
             if return_as_numpy_array:
                 yield npu.from_dict(row)[0]
             else:
