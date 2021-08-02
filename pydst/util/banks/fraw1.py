@@ -16,8 +16,15 @@ def _get_sep_datetime_at_mirror(fraw1_, i_mirror):
     m = (fraw1_["julian"] // 100) % 100
     d = fraw1_["julian"] % 100
 
-    _total_seconds = fraw1_["jsecond"] + fraw1_["second"][..., i_mirror]
-    nanosecond = (50 * fraw1_["clkcnt"][..., i_mirror] / 3 + fraw1_["jclkcnt"]).astype(int)
+    _total_seconds = fraw1_["jsecond"]
+    if i_mirror == 0 and fraw1_["num_mir"] == 0:
+        nanosecond = 0
+    elif 0 <= i_mirror < fraw1_["num_mir"]:
+        _total_seconds += fraw1_["second"][..., i_mirror]
+        nanosecond = (50 * fraw1_["clkcnt"][..., i_mirror] / 3 + fraw1_["jclkcnt"]).astype(int)
+    else:
+        raise IndexError(f"""Expected 0 <= i_mirror < {fraw1_["num_mir"]}, got {i_mirror}.""")
+
     if nanosecond > 999999999:
         nanosecond -= 1000000000
         _total_seconds += 1
