@@ -65,6 +65,15 @@ def open(file, mode="r"):
 #             _redirect_stdout(to=old_stdout)
 
 
+def _get_global_variable(bank_name):
+    if hasattr(dst.lib, f"{bank_name}_"):
+        return getattr(dst.lib, f"{bank_name}_")
+    elif hasattr(dst.lib, f"{bank_name}bank_"):
+        return getattr(dst.lib, f"{bank_name}bank_")
+    else:
+        raise NotImplementedError
+
+
 class DSTIOWrapper:
     used_unit_numbers = {0}
     mode_table = {
@@ -173,7 +182,7 @@ class DSTIOWrapper:
 
             if rc <= 0:
                 if rc == -1:
-                    warnings.warn(  # This bank have not finished properly in the writing process.
+                    warnings.warn(  # This bank has not finished properly in the writing process.
                         "STOP_BANK not found.", RuntimeWarning
                     )
                     break
@@ -184,7 +193,8 @@ class DSTIOWrapper:
                     """)
 
             bank_names = get_name_from_id(list(got_bank))
-            row = {bn: c_to_py.convert(getattr(dst.lib, f"{bn}_")) for bn in bank_names}
+
+            row = {bn: c_to_py.convert(_get_global_variable(bn)) for bn in bank_names}
 
             if return_as_numpy_array:
                 yield npu.from_dict(row)[0]
